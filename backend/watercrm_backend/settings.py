@@ -174,6 +174,8 @@ REST_FRAMEWORK = {
         'anon': '100/min',
         'user': '1000/min',
     },
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 SPECTACULAR_SETTINGS = {

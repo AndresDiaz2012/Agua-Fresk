@@ -1,0 +1,84 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: watercrm
+      POSTGRES_USER: watercrm
+      POSTGRES_PASSWORD: watercrm
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/docker/backend.Dockerfile
+    command: ["gunicorn", "watercrm_backend.wsgi:application", "-b", "0.0.0.0:8000"]
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgres://watercrm:watercrm@db:5432/watercrm
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CORS_ALLOW_ALL_ORIGINS: "True"
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/docker/backend.Dockerfile
+    command: ["celery", "-A", "watercrm_backend", "worker", "-l", "info"]
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgres://watercrm:watercrm@db:5432/watercrm
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  beat:
+    build:
+      context: ..
+      dockerfile: deploy/docker/backend.Dockerfile
+    command: ["celery", "-A", "watercrm_backend", "beat", "-l", "info"]
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgres://watercrm:watercrm@db:5432/watercrm
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/docker/frontend.Dockerfile
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  db_data:
